@@ -46,14 +46,30 @@ export default function ExamRoom({ mode, chapterDetails, questionsPool, overallT
     updateMimiBubble('idle');
   }, [mode, chapterDetails, questionsPool]);
 
-  // Run background stopwatch
+  // Run overall session timer
   useEffect(() => {
     const elapsedTimer = setInterval(() => {
-      setTotalElapsed(prev => prev + 1);
+      setTotalElapsed(prev => {
+        const nextTime = prev + 1;
+        // Check if overall timer expired
+        if (overallTimeLimit !== 'none') {
+          const limitSeconds = parseInt(overallTimeLimit) * 60;
+          if (nextTime >= limitSeconds) {
+            clearInterval(elapsedTimer);
+            if (onShowToast) {
+              onShowToast("⏰ Dojo Overall Session Timer Expired! Submitting your answers...", "info");
+            } else {
+              alert("⏰ Dojo Overall Session Timer Expired! Submitting your answers...");
+            }
+            handleFinish(score, false, limitSeconds);
+          }
+        }
+        return nextTime;
+      });
     }, 1000);
 
     return () => clearInterval(elapsedTimer);
-  }, []);
+  }, [overallTimeLimit, currentQuestions, score]);
 
   // Trigger KaTeX rendering on new question or answer display
   useEffect(() => {
@@ -209,6 +225,22 @@ export default function ExamRoom({ mode, chapterDetails, questionsPool, overallT
             <span style={{ fontWeight: 'bold', fontSize: '1.05rem', color: 'var(--text-light)' }}>
               🎯 {mode === 'quick' ? `Question: ${currentIndex + 1}/10` : mode === 'boss' ? `Boss Score: ${score}` : `Question: ${currentIndex + 1}/${currentQuestions.length}`}
             </span>
+            
+            {/* Overall Session Timer (No individual question countdown) */}
+            <div style={{
+              background: 'rgba(255, 142, 187, 0.1)',
+              border: '1.5px solid var(--primary-pink)',
+              padding: '6px 12px',
+              borderRadius: '12px',
+              fontWeight: '700',
+              fontSize: '0.92rem',
+              color: 'var(--text-dark)'
+            }}>
+              ⏱️ {overallTimeLimit !== 'none' 
+                ? `Overall Time: ${formatTime(Math.max(0, parseInt(overallTimeLimit) * 60 - totalElapsed))} Left` 
+                : `Time Elapsed: ${formatTime(totalElapsed)}`
+              }
+            </div>
             
             {mode === 'boss' && (
               <div style={{ display: 'flex', gap: '5px', fontSize: '1.3rem' }}>

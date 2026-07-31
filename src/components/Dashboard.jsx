@@ -256,6 +256,49 @@ export default function Dashboard({ user, onStartExam, leaderboard, overallTimeL
           </button>
         </div>
 
+        {/* Exam timer settings */}
+        <div className="cute-card" style={{ marginBottom: '25px', borderColor: 'var(--primary-pink)' }}>
+          <h4 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '10px' }}>⏱️ Custom Session Timer</h4>
+          <p style={{ fontSize: '0.88rem', color: 'var(--text-light)', marginBottom: '15px' }}>
+            Set your own overall time limit for the quiz session (e.g., 50 MCQs in 15 minutes!):
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.92rem' }}>
+              <input
+                type="checkbox"
+                checked={overallTimeLimit !== 'none'}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setOverallTimeLimit(15);
+                  } else {
+                    setOverallTimeLimit('none');
+                  }
+                }}
+                style={{ width: '18px', height: '18px', accentColor: 'var(--primary-pink)' }}
+              />
+              Enable Custom Session Limit
+            </label>
+
+            {overallTimeLimit !== 'none' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '5px' }}>
+                <input
+                  type="number"
+                  min="1"
+                  max="180"
+                  value={overallTimeLimit === 'none' ? 15 : overallTimeLimit}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    setOverallTimeLimit(isNaN(val) || val <= 0 ? 1 : val);
+                  }}
+                  className="cute-input"
+                  style={{ padding: '6px 12px', fontSize: '0.95rem', borderRadius: '12px', width: '80px' }}
+                />
+                <span style={{ fontWeight: '600', fontSize: '0.92rem' }}>Minutes</span>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Leaderboard Summary Preview */}
         <div className="cute-card">
           <h4 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '15px', borderBottom: '2px solid rgba(0,0,0,0.05)', paddingBottom: '8px' }}>
