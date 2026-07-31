@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import { generateQuestions } from './data/questionsGenerator';
 import { playWelcomeMeow, playHappyMeow, playSadMeow, playVictoryMeow, setSoundEnabled } from './utils/audioSynth';
@@ -27,6 +27,8 @@ export default function App() {
   const [overallTimeLimit, setOverallTimeLimit] = useState('none'); // 'none', 5, 10, 20, 30
   const [toast, setToast] = useState(null);
   const [soundOn, setSoundOn] = useState(true);
+
+  const reviewContainerRef = useRef(null);
 
   const showToast = (message, type = 'info') => {
     setToast({ message, type });
@@ -67,6 +69,25 @@ export default function App() {
       playWelcomeMeow();
     }
   }, [view]);
+
+  // Trigger KaTeX rendering on review items
+  useEffect(() => {
+    if (view === 'result' && reviewContainerRef.current && window.renderMathInElement) {
+      try {
+        window.renderMathInElement(reviewContainerRef.current, {
+          delimiters: [
+            { left: "$$", right: "$$", display: true },
+            { left: "$", right: "$", display: false },
+            { left: "\\(", right: "\\)", display: false },
+            { left: "\\[", right: "\\]", display: true }
+          ],
+          throwOnError: false
+        });
+      } catch (err) {
+        console.warn("KaTeX rendering error in review: ", err);
+      }
+    }
+  }, [view, lastExamResult]);
 
   const saveUserData = (updatedUser) => {
     setUser(updatedUser);
@@ -120,6 +141,8 @@ export default function App() {
   const handleStartExam = (mode, details = null) => {
     if (mode === 'leaderboard') {
       setView('leaderboard');
+    } else if (mode === 'formulas') {
+      setView('formulas');
     } else if (mode === 'upgrade') {
       setView('upgrade');
     } else {
@@ -136,35 +159,36 @@ export default function App() {
     }
   };
 
-  const handleFinishExam = ({ xpGained, staminaUsed, correctCount, totalCount, modeName, isGameOver }) => {
+  const handleFinishExam = ({ xpGained, staminaUsed, correctCount, totalCount, modeName, isGameOver, timeSpent, userAnswers }) => {
     const newActivity = {
       action: `Completed ${modeName} exam! (Score: ${correctCount}/${totalCount}, +${xpGained} XP) 🏆`,
       time: "Just now",
       status: "success"
     };
 
-    // Update chapter-wise high scores
-    let nextHighScores = { ...(user.chapterHighScores || {}) };
-    const isChapterMode = modeName.startsWith("Chapter: ");
-    const chapName = isChapterMode ? modeName.replace("Chapter: ", "") : null;
-    
-    if (chapName) {
-      const prevHigh = nextHighScores[chapName] || 0;
-      if (correctCount > prevHigh) {
-        nextHighScores[chapName] = correctCount;
-      }
-    }
-
     const updatedUser = {
       ...user,
       xp: user.xp + xpGained,
       stamina: Math.max(0, user.stamina - staminaUsed),
       activities: [newActivity, ...(user.activities || [])].slice(0, 10),
-      chapterHighScores: nextHighScores,
+      chapterHighScores: {
+        ...(user.chapterHighScores || {})
+      },
       totalCorrect: (user.totalCorrect || 0) + correctCount,
       totalAttempted: (user.totalAttempted || 0) + totalCount,
       examsCount: (user.examsCount || 0) + 1
     };
+
+    // Update chapter-wise high scores
+    const isChapterMode = modeName.startsWith("Chapter: ");
+    const chapName = isChapterMode ? modeName.replace("Chapter: ", "") : null;
+    
+    if (chapName) {
+      const prevHigh = (user.chapterHighScores && user.chapterHighScores[chapName]) || 0;
+      if (correctCount > prevHigh) {
+        updatedUser.chapterHighScores[chapName] = correctCount;
+      }
+    }
 
     setLastExamResult({
       correctCount,
@@ -172,7 +196,9 @@ export default function App() {
       xpGained,
       staminaUsed,
       modeName,
-      isGameOver
+      isGameOver,
+      timeSpent,
+      userAnswers: userAnswers || []
     });
 
     saveUserData(updatedUser);
@@ -181,7 +207,7 @@ export default function App() {
 
   const handleUpgradeComplete = (staminaGained, xpGained) => {
     const newActivity = {
-      action: `Upgraded condition at the Math Spa! (+${staminaGained}% Stamina, +${xpGained} XP) ⚡`,
+      action: `Upgraded condition at the Math Spa! (+&staminaGained}% Stamina, +${xpGained} XP) ⚡`,
       time: "Just now",
       status: "success"
     };
@@ -210,7 +236,6 @@ export default function App() {
 
   return (
     <div className="app-container">
-      
       {/* Dynamic Toast Notifications Overlay */}
       {toast && (
         <div style={{
@@ -232,6 +257,7 @@ export default function App() {
           {toast.message}
         </div>
       )}
+
       <div className="decorations">
         <div className="floating-cat">🐱</div>
         <div className="floating-cat">😸</div>
@@ -361,53 +387,156 @@ export default function App() {
         )}
 
         {view === 'result' && lastExamResult && (
-          <div className="cute-card" style={{ maxWidth: '600px', margin: '40px auto', textAlign: 'center' }}>
-            <div style={{ fontSize: '4rem', marginBottom: '15px' }}>
-              {lastExamResult.correctCount >= lastExamResult.totalCount * 0.8 ? '🎉😸🏆' : '😿🩹💪'}
-            </div>
-            <h2 style={{ fontSize: '1.8rem', fontWeight: 800, marginBottom: '10px' }}>
-              {lastExamResult.isGameOver ? 'Game Over' : 'Exam Completed!'}
-            </h2>
-            <p style={{ color: 'var(--text-light)', marginBottom: '20px' }}>
-              Mode: <strong>{lastExamResult.modeName}</strong>
-            </p>
-
-            <div style={{ background: 'white', borderRadius: '18px', padding: '20px', margin: '20px 0', border: '1.5px solid rgba(0,0,0,0.05)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-around', margin: '10px 0' }}>
-                <div>
-                  <div style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>Score</div>
-                  <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'green' }}>
-                    {lastExamResult.correctCount} / {lastExamResult.totalCount}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>XP Gained</div>
-                  <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--primary-pink-hover)' }}>
-                    +{lastExamResult.xpGained}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>Stamina Cost</div>
-                  <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'orange' }}>
-                    -{lastExamResult.staminaUsed}%
-                  </div>
-                </div>
-                                <div>
-                                  <div style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>Time Spent</div>
-                                  <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--secondary-purple)' }}>
-                                    {Math.floor(lastExamResult.timeSpent / 60)}m {lastExamResult.timeSpent % 60}s
-                                  </div>
-                                </div>
+          <div className="cute-card" style={{ maxWidth: '800px', margin: '40px auto' }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '4rem', marginBottom: '15px' }}>
+                {lastExamResult.correctCount >= lastExamResult.totalCount * 0.8 ? '🎉😸🏆' : '😿🩹💪'}
               </div>
+              <h2 style={{ fontSize: '1.8rem', fontWeight: 800, marginBottom: '10px' }}>
+                {lastExamResult.isGameOver ? 'Game Over' : 'Exam Completed!'}
+              </h2>
+              <p style={{ color: 'var(--text-light)', marginBottom: '20px' }}>
+                Mode: <strong>{lastExamResult.modeName}</strong>
+              </p>
+
+              <div style={{ background: 'white', borderRadius: '18px', padding: '20px', margin: '20px 0', border: '1.5px solid rgba(0,0,0,0.05)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-around', margin: '10px 0', flexWrap: 'wrap', gap: '15px' }}>
+                  <div>
+                    <div style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>Score</div>
+                    <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'green' }}>
+                      {lastExamResult.correctCount} / {lastExamResult.totalCount}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>XP Gained</div>
+                    <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--primary-pink-hover)' }}>
+                      +{lastExamResult.xpGained}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>Stamina Cost</div>
+                    <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'orange' }}>
+                      -{lastExamResult.staminaUsed}%
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>Time Spent</div>
+                    <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--secondary-purple)' }}>
+                      {Math.floor(lastExamResult.timeSpent / 60)}m {lastExamResult.timeSpent % 60}s
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <p style={{ fontSize: '0.95rem', color: 'var(--text-light)', marginBottom: '25px', lineHeight: 1.6 }}>
+                {lastExamResult.correctCount >= lastExamResult.totalCount * 0.8 
+                  ? 'Awesome kitty! You blew the traps away! The top of the leaderboard is close! 🐾🚀'
+                  : "You fell into some traps, but that's how we learn! Upgrade your condition and try again! Meow! 🌸"}
+              </p>
             </div>
 
-            <p style={{ fontSize: '0.95rem', color: 'var(--text-light)', marginBottom: '25px', lineHeight: 1.6 }}>
-              {lastExamResult.correctCount >= lastExamResult.totalCount * 0.8 
-                ? 'Awesome kitty! You blew the traps away! The top of the leaderboard is close! 🐾🚀'
-                : "You fell into some traps, but that's how we learn! Upgrade your condition and try again! Meow! 🌸"}
-            </p>
+            {/* Answer & Clue Review Section (Bengali) */}
+            {lastExamResult.userAnswers && lastExamResult.userAnswers.length > 0 && (
+              <div ref={reviewContainerRef} style={{ marginTop: '40px', borderTop: '2px solid rgba(0,0,0,0.05)', paddingTop: '25px' }}>
+                <h3 style={{ fontSize: '1.5rem', fontWeight: '800', marginBottom: '20px', color: 'var(--text-dark)' }}>
+                  📖 উত্তরমালা ও ফাঁদ বিশ্লেষণ (Answer Review & Clues)
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  {lastExamResult.userAnswers.map((answer, index) => {
+                    const letters = ['A', 'B', 'C', 'D'];
+                    const isUserCorrect = answer.selectedIndex === answer.correctIndex;
+                    
+                    return (
+                      <div 
+                        key={index} 
+                        style={{
+                          background: 'white',
+                          border: isUserCorrect ? '2px solid #62c362' : '2px solid #ff8080',
+                          borderRadius: '16px',
+                          padding: '20px',
+                          boxShadow: '0 4px 15px rgba(0,0,0,0.02)'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                          <span style={{ fontSize: '0.9rem', color: 'var(--primary-pink-hover)', fontWeight: 'bold' }}>
+                            প্রশ্ন {index + 1} | {answer.chapter}
+                          </span>
+                          <span style={{
+                            padding: '4px 10px',
+                            borderRadius: '10px',
+                            fontSize: '0.82rem',
+                            fontWeight: 'bold',
+                            background: isUserCorrect ? '#e6ffe6' : '#ffe6e6',
+                            color: isUserCorrect ? '#1e591e' : '#7f2626'
+                          }}>
+                            {isUserCorrect ? '✅ সঠিক' : '❌ ভুল'}
+                          </span>
+                        </div>
 
-            <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
+                        <p style={{ fontWeight: 'bold', fontSize: '1.05rem', marginBottom: '15px' }}>
+                          {answer.text}
+                        </p>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
+                          {answer.options.map((opt, oIdx) => {
+                            let borderCol = 'rgba(0,0,0,0.06)';
+                            let bgCol = 'transparent';
+                            let icon = '';
+
+                            if (oIdx === answer.correctIndex) {
+                              borderCol = '#62c362';
+                              bgCol = '#f0fff0';
+                              icon = ' (সঠিক উত্তর)';
+                            } else if (oIdx === answer.selectedIndex) {
+                              borderCol = '#ff8080';
+                              bgCol = '#fff0f0';
+                              icon = ' (তোমার উত্তর)';
+                            }
+
+                            return (
+                              <div 
+                                key={oIdx} 
+                                style={{
+                                  padding: '10px 15px',
+                                  border: `1.5px solid ${borderCol}`,
+                                  background: bgCol,
+                                  borderRadius: '12px',
+                                  fontSize: '0.92rem',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between'
+                                }}
+                              >
+                                <span><strong>{letters[oIdx]}.</strong> {opt}</span>
+                                <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: oIdx === answer.correctIndex ? '#1e591e' : '#7f2626' }}>
+                                  {icon}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Clue/Trap explanation in Bengali */}
+                        <div style={{
+                          background: 'rgba(255, 142, 187, 0.05)',
+                          border: '1px solid rgba(255, 142, 187, 0.2)',
+                          padding: '15px',
+                          borderRadius: '12px',
+                          fontSize: '0.9rem'
+                        }}>
+                          <strong>💡 ফাঁদ বিশ্লেষণ ও সমাধান ক্লু (Bengali Clue):</strong>
+                          <p style={{ marginTop: '5px', lineHeight: 1.5, color: '#4a4a4a' }}>
+                            {answer.trapExplanation}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '15px', justifyContent: 'center', marginTop: '30px' }}>
               <button className="cute-btn" onClick={() => setView('dashboard')}>
                 🏠 Dashboard
               </button>

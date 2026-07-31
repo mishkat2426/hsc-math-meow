@@ -19,6 +19,7 @@ export default function ExamRoom({ mode, chapterDetails, questionsPool, overallT
   const [score, setScore] = useState(0);
   const [hearts, setHearts] = useState(3); // only for boss mode
   const [totalElapsed, setTotalElapsed] = useState(0); // Track total elapsed time
+  const [userAnswers, setUserAnswers] = useState([]); // Track user answers for final review
   
   const [mimiState, setMimiState] = useState('idle');
   const [mimiBubbleText, setMimiBubbleText] = useState("Meow! Do math carefully, you'll fall into traps if you make mistakes! 🐾");
@@ -43,6 +44,7 @@ export default function ExamRoom({ mode, chapterDetails, questionsPool, overallT
     setHasAnswered(false);
     setSelectedOption(null);
     setTotalElapsed(0);
+    setUserAnswers([]);
     updateMimiBubble('idle');
   }, [mode, chapterDetails, questionsPool]);
 
@@ -126,6 +128,19 @@ export default function ExamRoom({ mode, chapterDetails, questionsPool, overallT
     const currentQ = currentQuestions[currentIndex];
     const isCorrect = optIndex === currentQ.correctIndex;
 
+    // Record this answer
+    setUserAnswers(prev => [
+      ...prev,
+      {
+        text: currentQ.text,
+        options: currentQ.options,
+        correctIndex: currentQ.correctIndex,
+        selectedIndex: optIndex,
+        trapExplanation: currentQ.trapExplanation,
+        chapter: currentQ.chapter
+      }
+    ]);
+
     if (isCorrect) {
       setScore(prev => prev + 1);
       playHappyMeow();
@@ -187,7 +202,8 @@ export default function ExamRoom({ mode, chapterDetails, questionsPool, overallT
       totalCount: mode === 'boss' ? finalScore + (3 - hearts) : currentQuestions.length,
       modeName: engMode,
       isGameOver,
-      timeSpent: finalTime
+      timeSpent: finalTime,
+      userAnswers: userAnswers
     });
   };
 
@@ -226,21 +242,20 @@ export default function ExamRoom({ mode, chapterDetails, questionsPool, overallT
               🎯 {mode === 'quick' ? `Question: ${currentIndex + 1}/10` : mode === 'boss' ? `Boss Score: ${score}` : `Question: ${currentIndex + 1}/${currentQuestions.length}`}
             </span>
             
-            {/* Overall Session Timer (No individual question countdown) */}
-            <div style={{
-              background: 'rgba(255, 142, 187, 0.1)',
-              border: '1.5px solid var(--primary-pink)',
-              padding: '6px 12px',
-              borderRadius: '12px',
-              fontWeight: '700',
-              fontSize: '0.92rem',
-              color: 'var(--text-dark)'
-            }}>
-              ⏱️ {overallTimeLimit !== 'none' 
-                ? `Overall Time: ${formatTime(Math.max(0, parseInt(overallTimeLimit) * 60 - totalElapsed))} Left` 
-                : `Time Elapsed: ${formatTime(totalElapsed)}`
-              }
-            </div>
+            {/* Show overall timer ONLY if it is not 'none' (time elapsed stopwatch is hidden!) */}
+            {overallTimeLimit !== 'none' && (
+              <div style={{
+                background: 'rgba(255, 142, 187, 0.1)',
+                border: '1.5px solid var(--primary-pink)',
+                padding: '6px 12px',
+                borderRadius: '12px',
+                fontWeight: '700',
+                fontSize: '0.92rem',
+                color: 'var(--text-dark)'
+              }}>
+                ⏱️ Overall Time: {formatTime(Math.max(0, parseInt(overallTimeLimit) * 60 - totalElapsed))} Left
+              </div>
+            )}
             
             {mode === 'boss' && (
               <div style={{ display: 'flex', gap: '5px', fontSize: '1.3rem' }}>
@@ -251,8 +266,6 @@ export default function ExamRoom({ mode, chapterDetails, questionsPool, overallT
                 ))}
               </div>
             )}
-
-
           </div>
 
           <div style={{ fontSize: '0.9rem', color: 'var(--primary-pink-hover)', fontWeight: 'bold', marginBottom: '8px' }}>
