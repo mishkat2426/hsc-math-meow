@@ -18,14 +18,11 @@ export default function ExamRoom({ mode, chapterDetails, questionsPool, overallT
   const [hasAnswered, setHasAnswered] = useState(false);
   const [score, setScore] = useState(0);
   const [hearts, setHearts] = useState(3); // only for boss mode
-  const [timeLeft, setTimeLeft] = useState(30);
-  const [isTimerActive, setIsTimerActive] = useState(false);
   const [totalElapsed, setTotalElapsed] = useState(0); // Track total elapsed time
   
   const [mimiState, setMimiState] = useState('idle');
   const [mimiBubbleText, setMimiBubbleText] = useState("Meow! Do math carefully, you'll fall into traps if you make mistakes! 🐾");
 
-  const timerRef = useRef(null);
   const mathContainerRef = useRef(null); // Ref to render math in current question
 
   // Initialize questions
@@ -33,18 +30,12 @@ export default function ExamRoom({ mode, chapterDetails, questionsPool, overallT
     let pool = [];
     if (mode === 'quick') {
       pool = [...questionsPool].sort(() => 0.5 - Math.random()).slice(0, 10);
-      setTimeLeft(30);
-      setIsTimerActive(true);
     } else if (mode === 'boss') {
       pool = [...questionsPool].sort(() => 0.5 - Math.random());
       setHearts(3);
-      setTimeLeft(45);
-      setIsTimerActive(true);
     } else if (mode === 'chapter') {
       pool = questionsPool.filter(q => q.chapter === chapterDetails);
       pool = pool.sort(() => 0.5 - Math.random()).slice(0, 50); // Set to 50 questions!
-      setTimeLeft(45);
-      setIsTimerActive(true);
     }
     setCurrentQuestions(pool);
     setCurrentIndex(0);
@@ -54,7 +45,6 @@ export default function ExamRoom({ mode, chapterDetails, questionsPool, overallT
     setTotalElapsed(0);
     updateMimiBubble('idle');
   }, [mode, chapterDetails, questionsPool]);
-
 
   // Run overall session timer
   useEffect(() => {
@@ -80,26 +70,6 @@ export default function ExamRoom({ mode, chapterDetails, questionsPool, overallT
 
     return () => clearInterval(elapsedTimer);
   }, [overallTimeLimit, currentQuestions, score]);
-
-  // Handle countdown timer
-  useEffect(() => {
-    if (isTimerActive && !hasAnswered && timeLeft > 0) {
-      timerRef.current = setTimeout(() => {
-        setTimeLeft(prev => prev - 1);
-      }, 1000);
-    } else if (timeLeft === 0 && !hasAnswered) {
-      handleTimeOut();
-    }
-    return () => clearTimeout(timerRef.current);
-  }, [timeLeft, isTimerActive, hasAnswered]);
-
-  // Alert student when time is low
-  useEffect(() => {
-    if (timeLeft === 10 && !hasAnswered && isTimerActive) {
-      setMimiState('warning');
-      setMimiBubbleText('Hurry up meow! Time is almost up! Faster! 🙀⏰');
-    }
-  }, [timeLeft, hasAnswered, isTimerActive]);
 
   // Trigger KaTeX rendering on new question or answer display
   useEffect(() => {
@@ -147,25 +117,6 @@ export default function ExamRoom({ mode, chapterDetails, questionsPool, overallT
     }
   };
 
-  const handleTimeOut = () => {
-    setSelectedOption(-1);
-    setHasAnswered(true);
-    playSadMeow();
-    updateMimiBubble('wrong');
-
-    if (mode === 'boss') {
-      setHearts(prev => {
-        const nextHearts = prev - 1;
-        if (nextHearts <= 0) {
-          setTimeout(() => {
-            handleFinish(score, true, totalElapsed);
-          }, 3000);
-        }
-        return nextHearts;
-      });
-    }
-  };
-
   const handleOptionClick = (optIndex) => {
     if (hasAnswered) return;
 
@@ -188,7 +139,7 @@ export default function ExamRoom({ mode, chapterDetails, questionsPool, overallT
           const nextHearts = prev - 1;
           if (nextHearts <= 0) {
             setTimeout(() => {
-              handleFinish(score, true);
+              handleFinish(score, true, totalElapsed);
             }, 3000);
           }
           return nextHearts;
@@ -201,18 +152,16 @@ export default function ExamRoom({ mode, chapterDetails, questionsPool, overallT
     const isLastQuestion = currentIndex >= currentQuestions.length - 1;
 
     if (isLastQuestion || (mode === 'boss' && hearts <= 0)) {
-      handleFinish(score, false);
+      handleFinish(score, false, totalElapsed);
     } else {
       setCurrentIndex(prev => prev + 1);
       setSelectedOption(null);
       setHasAnswered(false);
-      setTimeLeft(mode === 'boss' || mode === 'chapter' ? 45 : 30);
       updateMimiBubble('idle');
     }
   };
 
   const handleFinish = (finalScore, isGameOver = false, finalTime = totalElapsed) => {
-    setIsTimerActive(false);
     playVictoryMeow();
 
     let xpGained = finalScore * 25;
@@ -242,6 +191,12 @@ export default function ExamRoom({ mode, chapterDetails, questionsPool, overallT
     });
   };
 
+  const formatTime = (totalSeconds) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
   if (currentQuestions.length === 0) {
     return (
       <div className="cute-card" style={{ textAlign: 'center', padding: '50px' }}>
@@ -252,18 +207,12 @@ export default function ExamRoom({ mode, chapterDetails, questionsPool, overallT
 
   const currentQ = currentQuestions[currentIndex];
 
-  // Helper to ensure math equations in Bengali sentences are wrapped in $ delimiters for KaTeX auto-render
   const formatTextWithMath = (text) => {
     let formatted = text;
-    // Replace double backslash matrix and LaTeX macros with $ wrappers if not already wrapped
-    // This allows KaTeX auto-render to easily pick it up
-    
-    // Matrix wrapper helper
     if (formatted.includes('\\begin{bmatrix}') && !formatted.includes('$')) {
       formatted = formatted.replace(/\\begin\{bmatrix\}/g, '$\\begin{bmatrix}');
       formatted = formatted.replace(/\\end\{bmatrix\}/g, '\\end{bmatrix}$');
     }
-    
     return formatted;
   };
 
@@ -287,11 +236,21 @@ export default function ExamRoom({ mode, chapterDetails, questionsPool, overallT
               </div>
             )}
 
-            {isTimerActive && (
-              <div className="timer-box">
-                ⏱️ {timeLeft}s
-              </div>
-            )}
+            {/* Overall Session Timer (No individual question countdown) */}
+            <div style={{
+              background: 'rgba(255, 142, 187, 0.1)',
+              border: '1.5px solid var(--primary-pink)',
+              padding: '6px 12px',
+              borderRadius: '12px',
+              fontWeight: '700',
+              fontSize: '0.92rem',
+              color: 'var(--text-dark)'
+            }}>
+              ⏱️ {overallTimeLimit !== 'none' 
+                ? `Overall Time: ${formatTime(Math.max(0, parseInt(overallTimeLimit) * 60 - totalElapsed))} Left` 
+                : `Time Elapsed: ${formatTime(totalElapsed)}`
+              }
+            </div>
           </div>
 
           <div style={{ fontSize: '0.9rem', color: 'var(--primary-pink-hover)', fontWeight: 'bold', marginBottom: '8px' }}>
@@ -364,7 +323,7 @@ export default function ExamRoom({ mode, chapterDetails, questionsPool, overallT
               updateMimiBubble('idle');
             }}
           >
-            {mimiState === 'correct' ? '😸' : mimiState === 'wrong' ? '😿' : mimiState === 'warning' ? '🙀' : '🐱'}
+            {mimiState === 'correct' ? '😸' : mimiState === 'wrong' ? '😿' : '🐱'}
           </div>
 
           <div className="mimi-bubble">
