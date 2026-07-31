@@ -46,30 +46,14 @@ export default function ExamRoom({ mode, chapterDetails, questionsPool, overallT
     updateMimiBubble('idle');
   }, [mode, chapterDetails, questionsPool]);
 
-  // Run overall session timer
+  // Run background stopwatch
   useEffect(() => {
     const elapsedTimer = setInterval(() => {
-      setTotalElapsed(prev => {
-        const nextTime = prev + 1;
-        // Check if overall timer expired
-        if (overallTimeLimit !== 'none') {
-          const limitSeconds = parseInt(overallTimeLimit) * 60;
-          if (nextTime >= limitSeconds) {
-            clearInterval(elapsedTimer);
-            if (onShowToast) {
-              onShowToast("⏰ Dojo Overall Session Timer Expired! Submitting your answers...", "info");
-            } else {
-              alert("⏰ Dojo Overall Session Timer Expired! Submitting your answers...");
-            }
-            handleFinish(score, false, limitSeconds);
-          }
-        }
-        return nextTime;
-      });
+      setTotalElapsed(prev => prev + 1);
     }, 1000);
 
     return () => clearInterval(elapsedTimer);
-  }, [overallTimeLimit, currentQuestions, score]);
+  }, []);
 
   // Trigger KaTeX rendering on new question or answer display
   useEffect(() => {
@@ -236,21 +220,7 @@ export default function ExamRoom({ mode, chapterDetails, questionsPool, overallT
               </div>
             )}
 
-            {/* Overall Session Timer (No individual question countdown) */}
-            <div style={{
-              background: 'rgba(255, 142, 187, 0.1)',
-              border: '1.5px solid var(--primary-pink)',
-              padding: '6px 12px',
-              borderRadius: '12px',
-              fontWeight: '700',
-              fontSize: '0.92rem',
-              color: 'var(--text-dark)'
-            }}>
-              ⏱️ {overallTimeLimit !== 'none' 
-                ? `Overall Time: ${formatTime(Math.max(0, parseInt(overallTimeLimit) * 60 - totalElapsed))} Left` 
-                : `Time Elapsed: ${formatTime(totalElapsed)}`
-              }
-            </div>
+
           </div>
 
           <div style={{ fontSize: '0.9rem', color: 'var(--primary-pink-hover)', fontWeight: 'bold', marginBottom: '8px' }}>
